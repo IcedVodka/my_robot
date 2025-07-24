@@ -5,6 +5,7 @@ __pycache__/
 
 # test
 a.sh
+a.py
 
 # VS Code
 .vscode/
