@@ -9,7 +9,7 @@ from utils.debug_print import debug_print
 Hand_grip_angles = [1000, 14000, 14000, 14000, 14000, 10000]
 Hand_release_angles =  [4000, 17800, 17800, 17800, 17800, 10000]
 
-Init_joints = [0, 0, 90, 0, 90, 0]
+Arm_init_joints = [0, 0, 90, 0, 90, 0]
 
 class RealmanController():
     def __init__(self, name:str):
@@ -34,7 +34,7 @@ class RealmanController():
             raise ConnectionError(f"Failed to initialize robot arm: {str(e)}")
        
 
-    def reset(self, start_angles = None):
+    def reset_zero_position(self, start_angles = None):
         """Move robot to the zero position"""
         debug_print(self.name, f"\nMoving {self.name} arm to start position...", "INFO")
         
@@ -94,7 +94,7 @@ class RealmanController():
         return state  
     
     
-    def set_joint(self, joint):
+    def set_arm_joints(self, joint):
         try:
             if len(joint) != 6:
                 raise ValueError(f"Invalid joint length: {len(joint)}")
@@ -104,11 +104,11 @@ class RealmanController():
         except Exception as e:
             raise RuntimeError(f"Error moving robot: {str(e)}")
         
-    def set_init_joint(self):
+    def set_arm_init_joint(self):
         """
-        让机械臂运动到全局变量 Init_joints 所定义的位置
+        让机械臂运动到全局变量 Arm_init_joints 所定义的位置
         """
-        self.set_joint(Init_joints)
+        self.set_arm_joints(Arm_init_joints)
 
     def set_hand_angle(self, hand_angle, block=True, timeout=10):
         """
@@ -129,6 +129,26 @@ class RealmanController():
             return tag
         except Exception as e:
             raise RuntimeError(f"Error setting hand angle: {str(e)}")
+    
+    def set_hand_pos(self, hand_pos, block=True, timeout=10):
+        """
+        设置灵巧手位置跟随控制
+        Args:
+            hand_pos (list[int]): 手指位置数组，最大范围为0-65535，按照灵巧手厂商定义的角度做控制
+            block (bool): 是否阻塞，True为阻塞，False为非阻塞
+            timeout (int): 阻塞模式下超时时间，单位：秒
+        Returns:
+            int: 状态码，0为成功，其他为失败
+        """
+        try:
+            if not isinstance(hand_pos, (list, tuple)) or len(hand_pos) != 6:
+                raise ValueError(f"Invalid hand_pos, must be list of 6 ints, got: {hand_pos}")
+            tag = self.robot.rm_set_hand_follow_pos(hand_pos, block)
+            if tag != 0:
+                raise RuntimeError(f"Failed to set hand position, error code: {tag}")
+            return tag
+        except Exception as e:
+            raise RuntimeError(f"Error setting hand position: {str(e)}")
       
     
     def __del__(self):
@@ -151,11 +171,6 @@ class TeleoperationController:
         self._running = False
         self._master_thread = None
         self._slave_thread = None
-
-        
-        self.hand_grip_angles = Hand_grip_angles
-        self.hand_release_angles =  Hand_release_angles
-        self.init_joints = Init_joints
 
         # 初始化时松开灵巧手
         self.release_hand(block=True)
@@ -186,7 +201,7 @@ class TeleoperationController:
         while self._running:
             try:
                 joint = self._q.get(timeout=0.5)
-                self.slave.set_joint(joint)
+                self.slave.set_arm_joints(joint)
             except queue.Empty:
                 pass
             except Exception as e:
@@ -211,13 +226,13 @@ class TeleoperationController:
         """
         夹紧灵巧手
         """
-        return self.slave.set_hand_angle(self.hand_grip_angles, block=block)
+        return self.slave.set_hand_angle(Hand_grip_angles, block=block)
 
     def release_hand(self, block=True):
         """
         松开灵巧手
         """
-        return self.slave.set_hand_angle(self.hand_release_angles, block=block)
+        return self.slave.set_hand_angle(Hand_release_angles, block=block)
 
     def start(self):
         self._running = True
